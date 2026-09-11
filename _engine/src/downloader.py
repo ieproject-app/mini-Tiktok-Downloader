@@ -12,6 +12,8 @@ Mendukung:
 import os
 import re
 import time
+import subprocess
+import shutil
 import urllib.parse
 import yt_dlp
 from rich.console import Console
@@ -78,16 +80,18 @@ def sanitize_title(title: str) -> str:
 #  Format options
 # ─────────────────────────────────────────────────────────────────────────────
 
-FORMAT_VIDEO_NO_WM = "video_no_wm"    # Video tanpa watermark (default)
-FORMAT_VIDEO_WM    = "video_wm"       # Video dengan watermark
-FORMAT_AUDIO_MP3   = "mp3"            # Audio MP3 320kbps
-FORMAT_AUDIO_M4A   = "m4a"            # Audio M4A (original codec)
+FORMAT_VIDEO_NO_WM    = "video_no_wm"       # Video tanpa watermark (vertikal asli)
+FORMAT_VIDEO_LANDSCAPE= "video_landscape"   # Video tanpa watermark — Landscape 16:9 (auto-crop black bars)
+FORMAT_VIDEO_WM       = "video_wm"          # Video dengan watermark
+FORMAT_AUDIO_MP3      = "mp3"               # Audio MP3 320kbps
+FORMAT_AUDIO_M4A      = "m4a"               # Audio M4A (original codec)
 
 ALL_FORMATS = [
-    (FORMAT_VIDEO_NO_WM, "Video (No Watermark) — MP4"),
-    (FORMAT_VIDEO_WM,    "Video (With Watermark) — MP4"),
-    (FORMAT_AUDIO_MP3,   "Audio MP3 (320 kbps)"),
-    (FORMAT_AUDIO_M4A,   "Audio M4A"),
+    (FORMAT_VIDEO_NO_WM,     "Video (No Watermark) — MP4"),
+    (FORMAT_VIDEO_LANDSCAPE, "Video Landscape 16:9 — MP4 (Crop Black Bars)"),
+    (FORMAT_VIDEO_WM,        "Video (With Watermark) — MP4"),
+    (FORMAT_AUDIO_MP3,       "Audio MP3 (320 kbps)"),
+    (FORMAT_AUDIO_M4A,       "Audio M4A"),
 ]
 
 
@@ -161,6 +165,70 @@ class TikTokDownloader:
             info = ydl.extract_info(url, download=False)
         return info
 
+    def get_ffmpeg_cmd(self):
+        """Dapatkan path executable ffmpeg."""
+        if self.ffmpeg_dir:
+            exe = os.path.join(self.ffmpeg_dir, "ffmpeg.exe" if os.name == "nt" else "ffmpeg")
+            if os.path.exists(exe):
+                return exe
+        return shutil.which("ffmpeg") or "ffmpeg"
+
+    def crop_video_to_landscape(self, input_path: str) -> str:
+        """Deteksi rasio & potong bar hitam (letterbox) otomatis menjadi Landscape (16:9).
+
+        Jika video aslinya portrait (mis. 576x1030) tapi kontennya adalah film 16:9
+        dengan bar hitam di atas & bawah, fungsi ini otomatis memotong bar hitam tersebut
+        sehingga video menjadi bersih 16:9 layar penuh.
+        """
+        ffmpeg_bin = self.get_ffmpeg_cmd()
+        if not ffmpeg_bin:
+            _console.print("[yellow][!] FFmpeg tidak ditemukan, skip crop landscape.[/yellow]")
+            return input_path
+
+        base, ext = os.path.splitext(input_path)
+        output_path = f"{base}_landscape.mp4"
+
+        try:
+            _console.print("[cyan][*] Menganalisis dan memotong ke Landscape 16:9...[/cyan]")
+            # 1. Jalankan cropdetect 50 frame untuk mendeteksi batas bar hitam
+            detect_cmd = [
+                ffmpeg_bin, "-ss", "00:00:30", "-i", input_path,
+                "-vframes", "50", "-vf", "cropdetect=24:2", "-f", "null", "-"
+            ]
+            detect_proc = subprocess.run(detect_cmd, capture_output=True, text=True, errors="replace")
+            crop_matches = re.findall(r'crop=([0-9]+:[0-9]+:[0-9]+:[0-9]+)', detect_proc.stderr)
+
+            crop_filter = None
+            if crop_matches:
+                # Ambil crop parameter yang paling sering muncul
+                from collections import Counter
+                crop_box = Counter(crop_matches).most_common(1)[0][0]
+                cw, ch, cx, cy = [int(v) for v in crop_box.split(':')]
+                crop_filter = f"crop={cw}:{ch}:{cx}:{cy}"
+            else:
+                # Fallback jika cropdetect tidak mendeteksi: crop tengah rasio 16:9
+                crop_filter = "crop=iw:ih*9/16:0:(ih-ih*9/16)/2"
+
+            # 2. Render video yang sudah dipotong
+            render_cmd = [
+                ffmpeg_bin, "-y", "-i", input_path,
+                "-vf", crop_filter,
+                "-c:v", "libx264", "-crf", "20", "-preset", "veryfast",
+                "-c:a", "copy",
+                output_path
+            ]
+            res = subprocess.run(render_cmd, capture_output=True, text=True, errors="replace")
+            if res.returncode == 0 and os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+                _console.print("[green][v] Berhasil dikonversi ke format Landscape 16:9![/green]")
+                return output_path
+            else:
+                _console.print(f"[yellow][!] Gagal crop landscape: {res.stderr[:200]}[/yellow]")
+                return input_path
+        except Exception as e:
+            _console.print(f"[yellow][!] Error saat crop landscape: {e}[/yellow]")
+            return input_path
+
+
     def _clear_partial_files(self, target_dir: str, name_prefix: str):
         try:
             for f in os.listdir(target_dir):
@@ -227,7 +295,7 @@ class TikTokDownloader:
         ydl_opts['outtmpl'] = outtmpl
         ydl_opts['progress_hooks'] = [ytdl_progress_hook]
 
-        if fmt == FORMAT_VIDEO_NO_WM or fmt == FORMAT_VIDEO_WM:
+        if fmt in (FORMAT_VIDEO_NO_WM, FORMAT_VIDEO_LANDSCAPE, FORMAT_VIDEO_WM):
             # Pilih kualitas video terbaik, merge ke MP4
             ydl_opts['format'] = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best'
             ydl_opts['merge_output_format'] = 'mp4'
@@ -280,6 +348,17 @@ class TikTokDownloader:
                     reverse=True
                 )
                 downloaded_file = os.path.join(target_dir, candidates[0])
+
+        # ── Jika user memilih format Landscape 16:9, crop otomatis ────────
+        if fmt == FORMAT_VIDEO_LANDSCAPE and os.path.exists(downloaded_file):
+            cropped_file = self.crop_video_to_landscape(downloaded_file)
+            if cropped_file != downloaded_file:
+                # Hapus file mentah vertikal agar tidak memakan storage ganda
+                try:
+                    os.remove(downloaded_file)
+                except Exception:
+                    pass
+                downloaded_file = cropped_file
 
         return downloaded_file, info, target_dir
 

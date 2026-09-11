@@ -72,10 +72,11 @@ https://vt.tiktok.com/XXXXXXX/
 
 | Pilihan | Format | Keterangan |
 |---------|--------|-----------|
-| `1` | **Video (No Watermark)** ⭐ | MP4 kualitas terbaik, TANPA watermark TikTok |
-| `2` | Video (With Watermark) | MP4 kualitas terbaik, dengan watermark |
-| `3` | Audio MP3 | 320 kbps, dengan cover art embed |
-| `4` | Audio M4A | Kualitas asli (lebih kecil) |
+| `1` | **Video (No Watermark)** ⭐ | MP4 kualitas terbaik, TANPA watermark TikTok (rasio asli) |
+| `2` | **Video Landscape 16:9** 🎬 | MP4 potong bar hitam otomatis, pas untuk layar laptop/TV |
+| `3` | Video (With Watermark) | MP4 kualitas terbaik, dengan watermark |
+| `4` | Audio MP3 | 320 kbps, dengan cover art embed |
+| `5` | Audio M4A | Kualitas asli (lebih kecil) |
 
 ### Shortcut Keyboard
 

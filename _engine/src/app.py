@@ -34,6 +34,7 @@ from downloader import (
     is_supported_tiktok_url,
     ALL_FORMATS,
     FORMAT_VIDEO_NO_WM,
+    FORMAT_VIDEO_LANDSCAPE,
     FORMAT_VIDEO_WM,
     FORMAT_AUDIO_MP3,
     FORMAT_AUDIO_M4A,
@@ -120,10 +121,11 @@ def render_format_menu():
     table.add_column("Kualitas", style="white")
 
     fmt_map = {
-        "1": (FORMAT_VIDEO_NO_WM, "Video", "Tanpa Watermark (MP4) ⭐ Rekomendasi"),
-        "2": (FORMAT_VIDEO_WM,    "Video", "Dengan Watermark (MP4)"),
-        "3": (FORMAT_AUDIO_MP3,   "Audio", "MP3 320 kbps"),
-        "4": (FORMAT_AUDIO_M4A,   "Audio", "M4A (Kualitas Asli)"),
+        "1": (FORMAT_VIDEO_NO_WM,     "Video", "Tanpa Watermark — Asli (MP4) ⭐ Rekomendasi"),
+        "2": (FORMAT_VIDEO_LANDSCAPE, "Video", "Tanpa Watermark — Landscape 16:9 (Crop Black Bars) 🎬"),
+        "3": (FORMAT_VIDEO_WM,        "Video", "Dengan Watermark (MP4)"),
+        "4": (FORMAT_AUDIO_MP3,       "Audio", "MP3 320 kbps"),
+        "5": (FORMAT_AUDIO_M4A,       "Audio", "M4A (Kualitas Asli)"),
     }
 
     for num, (_, tipe, label) in fmt_map.items():
