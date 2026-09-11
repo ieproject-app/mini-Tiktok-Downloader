@@ -17,6 +17,12 @@ import yt_dlp
 from rich.console import Console
 from rich.progress import Progress, BarColumn, TextColumn, TimeRemainingColumn, TransferSpeedColumn, DownloadColumn
 
+try:
+    from yt_dlp.networking.impersonate import ImpersonateTarget
+    _HAS_IMPERSONATE = True
+except ImportError:
+    _HAS_IMPERSONATE = False
+
 _console = Console(force_terminal=True, legacy_windows=False)
 
 # yt-dlp embeds raw ANSI color codes in error strings; strip them for clean display
@@ -102,7 +108,17 @@ class TikTokDownloader:
         return (self.cfg.get("cookies_browser", "") or "").strip().lower()
 
     def _get_base_opts(self, no_watermark=True):
-        """Base yt-dlp opts optimized for TikTok."""
+        """Base yt-dlp opts optimized for TikTok.
+
+        Catatan implementasi:
+        - yt_dlp_ejs (bundled dengan yt-dlp[default]) menyediakan native Python
+          JS solver, sehingga yt-dlp dapat melewati JS challenge TikTok TANPA
+          membutuhkan curl_cffi/impersonation.
+        - api_hostname 'api22-normal-c-useast1a.tiktokv.com' digunakan untuk
+          mendapat stream video tanpa watermark (community-documented trick).
+        - curl_cffi + ImpersonateTarget tersedia sebagai opsional fallback bila
+          yt_dlp_ejs gagal di masa depan.
+        """
         opts = {
             'quiet': True,
             'no_warnings': True,
@@ -110,20 +126,23 @@ class TikTokDownloader:
             'retries': 5,
             'fragment_retries': 5,
             'socket_timeout': 30,
-            'user_agent': (
-                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-                'AppleWebKit/537.36 (KHTML, like Gecko) '
-                'Chrome/124.0.0.0 Safari/537.36'
-            ),
         }
 
         if no_watermark:
-            # API hostname tanpa watermark — dokumen komunitas yt-dlp
+            # API hostname tanpa watermark — community-documented trick
             opts['extractor_args'] = {
                 'tiktok': {
                     'api_hostname': ['api22-normal-c-useast1a.tiktokv.com'],
                 }
             }
+
+        # Opsional: aktifkan impersonasi Chrome bila curl_cffi tersedia
+        # (sebagai fallback tambahan, bukan requirement utama)
+        if _HAS_IMPERSONATE:
+            try:
+                opts['impersonate'] = ImpersonateTarget('chrome')
+            except Exception:
+                pass
 
         if self.cookies_browser_setting():
             opts['cookiesfrombrowser'] = (self.cookies_browser_setting(), None, None, None)
@@ -132,6 +151,7 @@ class TikTokDownloader:
             opts['ffmpeg_location'] = self.ffmpeg_dir
 
         return opts
+
 
     def get_video_info(self, url: str):
         """Ekstrak metadata video TikTok."""

@@ -69,7 +69,7 @@ def ensure_dependencies():
         print(f"[X] Python 3.9+ diperlukan. Versi saat ini: {sys.version}")
         sys.exit(1)
 
-    required = ["yt_dlp", "rich", "requests"]
+    required = ["yt_dlp", "rich", "requests", "curl_cffi"]
     missing = []
     for pkg in required:
         try:
