@@ -1,0 +1,31 @@
+# Unduhan user & artefak besar (jangan pernah masuk git)
+downloads/
+_engine/bin/
+__pycache__/
+*.pyc
+*.part
+*.ytdl
+*.tmp
+
+# Konfigurasi lokal mesin-spesifik & state
+_engine/config.json
+.zcode/
+logs/
+
+# Internal planning notes (tidak untuk publik)
+plans/
+
+# Backup riwayat git
+.history-backup/
+
+# Artefak updater runtime (dibuat app saat update)
+_engine/updater.ps1
+
+# API key & env lokal (jangan pernah masuk git)
+.env
+.env.local
+
+# IDE & OS files
+.DS_Store
+Thumbs.db
+*.swp
